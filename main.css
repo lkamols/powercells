@@ -17,26 +17,13 @@ ul {
     font-family: helvetica;
 }
 
-li {
-    list-style: circle;
-}
-  
-.list {
-    list-style: square;
-}
-  
-
-
-.light-theme {
-    --bg: var(--green);
-    --fontColor: var(--black);
-    --btnBg: var(--black);
-    --btnFontColor: var(--white);
+#start-msg {
+    visibility: hidden;
 }
 
 .dark-theme {
     --bg: var(--black);
-    --fontColor: var(--green);
+    --fontColor: var(--white);
     --btnBg: var(--white);
     --btnFontColor: var(--black);
 }

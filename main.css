@@ -40,4 +40,14 @@ ul {
       background-color: var(--btnBg);
 }
 
+.add-btn {
+    color: var(--btnFontColor);
+    background-color: var(--btnBg);
+}
+
+.entry {
+    color: var(--btnFontColor);
+    background-color: var(--btnBg);
+}
+
 .btn:focus { outline-style: none; }

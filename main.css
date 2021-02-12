@@ -47,7 +47,7 @@ ul {
     background-color: #00FF00;
     display: grid;
     grid-template-columns: 300px 500px 500px auto;
-    height: 250px;
+    /*height: 250px;*/
 }
 
 .charger-status-div {
@@ -91,7 +91,6 @@ ul {
     margin-top: 1px;
     height: 5px;
 }
-
 
 .top-menu-div {
     background-color: #FF0000;

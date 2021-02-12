@@ -17,7 +17,7 @@ ul {
     font-family: helvetica;
 }
 
-#start-msg {
+#enter-status {
     visibility: hidden;
 }
 
@@ -28,18 +28,6 @@ ul {
     --btnFontColor: var(--black);
 }
 
-.btn {
-        position: absolute;
-        top: 20px;
-        left: 250px;
-        height: 50px;
-        width: 50px;
-        border-radius: 50%;
-        border: none;
-      color: var(--btnFontColor);
-      background-color: var(--btnBg);
-}
-
 .add-btn {
     color: var(--btnFontColor);
     background-color: var(--btnBg);
@@ -48,6 +36,78 @@ ul {
 .entry {
     color: var(--btnFontColor);
     background-color: var(--btnBg);
+}
+
+.charger-display-title {
+    color: var(--fontColor);
+    text-align: center;
+}
+
+.charger-div {
+    background-color: #00FF00;
+    display: grid;
+    grid-template-columns: 300px 500px 500px auto;
+    height: 250px;
+}
+
+.charger-status-div {
+    background-color: #567349;
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+}
+
+.charger-live-display-div-left {
+    background-color: #894100;
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+}
+
+.charger-live-display-div-right {
+    grid-column: 3 / 4;
+    grid-row: 1 / 2;
+}
+
+.single-battery {
+    display: grid;
+    grid-template-columns: 20px 200px auto;
+}
+
+.battery-number {
+    text-align: right;
+    grid-column: 1 / 2;
+    height: 5px;
+    margin-top: 1px;
+}
+
+.battery-display {
+    margin-left: 10px;
+    margin-right: 10px;
+    grid-column: 2/3;
+}
+
+.battery-status {
+    grid-column: 3/4;
+    text-align: left;
+    margin-top: 1px;
+    height: 5px;
+}
+
+
+.top-menu-div {
+    background-color: #FF0000;
+    display: grid;
+    grid-template-columns: 300px auto;
+    padding-left: 20px;
+}
+
+#enter-ip-div {
+    background-color: #0278F3;
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+}
+
+.chargers-container {
+    background-color: #0000FF;
 }
 
 .btn:focus { outline-style: none; }

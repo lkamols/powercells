@@ -8,23 +8,56 @@
 </head>
 <body class="dark-theme">
     <h1>PowerCells v1</h1>
-    <p id="msg">Press button to begin:</p>
-
-    <p id="start-msg">Started</p>
-
-    <div>
-      <button class="btn">Start</button>
-    </div>
     
-    <div class="grid-container">
-      <p>Enter A MegaCell Charger:</p>
-      <input class="entry" type="text" id="entry" ></input>
-      <button class="add-btn">Add</button>
+    <div class="top-menu-div">
+      <div id="enter-ip-div">
+        <p id="enter-instructions">Enter A MegaCell Charger:</p>
+        <input class="entry" type="text" id="ipentry" ></input>
+        <button class="add-btn">Add</button>
+        <p id="enter-status">hi</p>
+      </div>
     </div>
 
-    <!--this will be where all the current -->
-    <div class="grid-container" id="update-grid">
+    <div class="chargers-container">
+      <div class="charger-div">
+        <div class="charger-status-div">
+          <h4 class="charger-display-title">Charger: 192.168.0.69</h4>
+        </div>
+        
+        <div class="charger-live-display-div-left">
+          <div class="single-battery">
+            <p class="battery-number">1</p>
+            <progress class="battery-display" value="42" max="100"></progress>
+            <p class="battery-status">Status: Idle</p>
+          </div>
+          <div class="single-battery">
+            <p class="battery-number">1</p>
+            <progress class="battery-display" value="42" max="100"></progress>
+          </div>
+          <div class="single-battery">
+            <p class="battery-number">1</p>
+            <progress class="battery-display" value="42" max="100"></progress>
+          </div>
+        </div>
 
+        <div class="charger-live-display-div-right">
+          <div class="single-battery">
+            <p class="battery-number">1</p>
+            <progress class="battery-display" value="42" max="100"></progress>
+            <p class="battery-status">Status: Idle</p>
+          </div>
+          <div class="single-battery">
+            <p class="battery-number">1</p>
+            <progress class="battery-display" value="42" max="100"></progress>
+          </div>
+          <div class="single-battery">
+            <p class="battery-number">1</p>
+            <progress class="battery-display" value="42" max="100"></progress>
+          </div>
+        </div>
+
+        
+      </div>
     </div>
     
     

@@ -21,6 +21,10 @@ ul {
     visibility: hidden;
 }
 
+.charger-status {
+    visibility: hidden;
+}
+
 .dark-theme {
     --bg: var(--black);
     --fontColor: var(--white);
@@ -29,6 +33,11 @@ ul {
 }
 
 .add-btn {
+    color: var(--btnFontColor);
+    background-color: var(--btnBg);
+}
+
+.read-btn {
     color: var(--btnFontColor);
     background-color: var(--btnBg);
 }
@@ -47,7 +56,6 @@ ul {
     background-color: #00FF00;
     display: grid;
     grid-template-columns: 300px 500px 500px auto;
-    /*height: 250px;*/
 }
 
 .charger-status-div {
@@ -97,6 +105,20 @@ ul {
     display: grid;
     grid-template-columns: 300px auto;
     padding-left: 20px;
+}
+
+.battery-display-background {
+    background-color: #777777;
+    align-self: center;
+    margin-left: auto;
+    margin-right: auto;
+    width: 90%;
+    height: 80%;
+}
+
+.battery-display-foreground {
+    width: 0%;
+    height: 100%;
 }
 
 #enter-ip-div {

@@ -203,20 +203,7 @@ function returnedCellsInfo() {
     }
 }
 
-/**
- * update the battery display
- * @param battery - the battery we are updating
- * @param voltageReading - the voltage reading for the battery
- */
-function updateBatteryDisplay(battery, voltageReading) {
-    //first determine the percentage of the battery being full
-    var percentage =  Math.max(0, Math.min(100, (voltageReading - configuration.MiV)/(configuration.MaV - configuration.MiV)*100));
-    battery.style.width = percentage + "%";
-    //cause colours are fun, gradient from red to green
-    var red = Math.floor(255 * (Math.min(100, 200 - 2*percentage)) / 100);
-    var green = Math.floor(255 * (Math.min(100, 2*percentage)) / 100);
-    battery.style.backgroundColor = `rgb(${red},${green},0)`;
-}
+
 
 ////////////////////////////////////////DISPLAY CODE/////////////////////////////////////////
 
@@ -253,7 +240,7 @@ function createChargerDisplay(charger) {
     var outsideContainer = document.getElementById("chargers-container");
     outsideContainer.appendChild(chargerContainer);
 
-    charger.container = outsideContainer; //add the full container to the charger object
+    charger.container = chargerContainer; //add the full container to the charger object
 }
 
 /**
@@ -331,21 +318,14 @@ function createIndividualBatteryDisplay(index) {
     numberDisplay.innerHTML = index;
     container.appendChild(numberDisplay);
 
-    //then create the progress display and add it, start all progress bars at 0
-    /*
-    var batteryDisplay = document.createElement("progress");
-    batteryDisplay.className = "battery-display";
-    batteryDisplay.value = 0;
-    batteryDisplay.max = 100;
-    container.appendChild(batteryDisplay);
-    */
+    //create the progress display, this is just two divs inside each other coloured differently
     var batteryDisplayBackground = document.createElement("div");
     batteryDisplayBackground.className = "battery-display-background";
     
     var batteryDisplayForeground = document.createElement("div");
     batteryDisplayForeground.className = "battery-display-foreground";
-    container.appendChild(batteryDisplayBackground);
     batteryDisplayBackground.appendChild(batteryDisplayForeground);
+    container.appendChild(batteryDisplayBackground);
     
 
     //final create the status section for each one
@@ -363,6 +343,7 @@ function createIndividualBatteryDisplay(index) {
  * @param message the text to put as the charger status
  */
 function updateChargerStatus(charger, message) {
+    console.log(charger.container);
     var status = charger.container.querySelector(".charger-status");
     status.style.visibility = "visible";
     status.innerHTML = message;
@@ -380,6 +361,20 @@ function failedChargerAdd(ipAddress, reason) {
 }
 
 
+/**
+ * update the battery display
+ * @param battery - the battery we are updating
+ * @param voltageReading - the voltage reading for the battery
+ */
+function updateBatteryDisplay(battery, voltageReading) {
+    //first determine the percentage of the battery being full
+    var percentage =  Math.max(0, Math.min(100, (voltageReading - configuration.MiV)/(configuration.MaV - configuration.MiV)*100));
+    battery.style.width = percentage + "%";
+    //cause colours are fun, gradient from red to green
+    var red = Math.floor(255 * (Math.min(100, 200 - 2*percentage)) / 100);
+    var green = Math.floor(255 * (Math.min(100, 2*percentage)) / 100);
+    battery.style.backgroundColor = `rgb(${red},${green},0)`;
+}
 
 
 

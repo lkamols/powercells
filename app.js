@@ -1,10 +1,11 @@
 'use strict'
 
-const serverLocation = "http://localhost:8080";
+const serverLocation = "http://localhost:";
+const port = 8080;
 
 //SELECTORS
-const switcher = document.querySelector('.btn');
-const addChargerButton = document.querySelector('.add-btn');
+const addChargerButton = document.querySelector('#add-btn');
+const portChangeButton = document.querySelector('#port-btn');
 
 const chargers = [];
 const NUM_BATTERIES = 16;
@@ -40,9 +41,9 @@ function newIpAdded(event) {
     whoAmIReq.url = "http://" + whoAmIReq.enteredIp + "/api/who_am_i";
     whoAmIReq.onload = whoAmIResponse; //the response will be handled in the whoAmIResponse function
     whoAmIReq.onerror = function() {
-        failedChargerAdd(this.enteredIp, "failed to connect to server at " + serverLocation);
+        failedChargerAdd(this.enteredIp, "failed to connect to server at " + serverLocation + port);
     }
-    whoAmIReq.open("POST", serverLocation);
+    whoAmIReq.open("POST", serverLocation + port);
     whoAmIReq.setRequestHeader("Content-Type", "application/json");
 
     //construct the body, we just need to send a get request to who_am_i
@@ -113,9 +114,9 @@ function setConfigInfo(ipAddress, version) {
     setConfigReq.url = "http://" + ipAddress + "/api/set_config_info";
     setConfigReq.onload = setConfigResponse; //the response will be handled by this function
     setConfigReq.onerror = function() {
-        failedChargerAdd(this.enteredIp, "Failed to connect to server at " + serverLocation);
+        failedChargerAdd(this.enteredIp, "Failed to connect to server at " + serverLocation + port);
     }
-    setConfigReq.open("POST", serverLocation);
+    setConfigReq.open("POST", serverLocation + port);
     setConfigReq.setRequestHeader("Content-Type", "application/json");
 
     //construct the body
@@ -159,7 +160,7 @@ function getCellsInfo() {
     }
     
     //cellsInfoReq.onerror TODO ADD THIS
-    cellsInfoReq.open("POST", serverLocation);
+    cellsInfoReq.open("POST", serverLocation + port);
     cellsInfoReq.setRequestHeader("Content-Type", "application/json");
 
     //construct the body of the request we want to send, this is the info sent to the server
@@ -203,7 +204,11 @@ function returnedCellsInfo() {
     }
 }
 
-
+function updatePortNumber() {
+    portEntry = document.querySelector('#portentry');
+    portVal = portEntry.value;
+    console.log(portVal)
+}
 
 ////////////////////////////////////////DISPLAY CODE/////////////////////////////////////////
 
@@ -381,3 +386,4 @@ function updateBatteryDisplay(battery, voltageReading) {
 
 ///////////////////////////////////////EVENTS/////////////////////////////////////
 addChargerButton.addEventListener('click', newIpAdded, false);
+portChangeButton.addEventListener('click', updatePortNumber, false);

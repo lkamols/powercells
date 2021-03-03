@@ -32,7 +32,7 @@ ul {
     --btnFontColor: var(--black);
 }
 
-.add-btn {
+.btn {
     color: var(--btnFontColor);
     background-color: var(--btnBg);
 }

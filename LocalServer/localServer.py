@@ -70,6 +70,7 @@ class MyServer(BaseHTTPRequestHandler):
     POST - perform a post request on the local network and forward the response, with 'url' and 'body'
     READ - read a json from the given file
     WRITE - write a json to the given file
+    DISCOVER - a message sent from the server to check if this server is running
     """
     def do_POST(self):
         print("Post request received")
@@ -90,7 +91,7 @@ class MyServer(BaseHTTPRequestHandler):
         body = request.get("body")
         
         #do some error checking
-        if request_type == None or location == None:
+        if request_type == None or (request_type != "DISCOVER" and location == None):
             print("Missing a request type or location field")
             return
         
@@ -108,6 +109,9 @@ class MyServer(BaseHTTPRequestHandler):
             elif request_type == "WRITE":
                 with open(location, "w") as write_file:
                     json.dump(body, write_file)
+                response_body = None #don't need to send any information in the response
+            elif request_type == "DISCOVER":
+                response_body = '{"discover" : 1}'.encode('utf-8')
             else:
                 print("invalid request type")
                 return
@@ -116,7 +120,8 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()
-            self.wfile.write(response_body)
+            if response_body != None:
+                self.wfile.write(response_body)
         except requests.exceptions.RequestException:
             print("Request had an exception - likely incorrect ip address")
             self.send_response(404)

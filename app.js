@@ -1,11 +1,13 @@
 'use strict'
 
 const serverLocation = "http://localhost:";
-const port = 8080;
+const portList = [8080, 57923, 54782, 63342, 50124]
+var serverPort = -1; //-1 means we haven't found a port yet
 
 //SELECTORS
 const addChargerButton = document.querySelector('#add-btn');
 const portChangeButton = document.querySelector('#port-btn');
+const portSearchButton = document.querySelector('#search-port-btn');
 
 const chargers = [];
 const NUM_BATTERIES = 16;
@@ -32,7 +34,7 @@ const configuration = {
 /**
  * new IP address added
  */
-function newIpAdded(event) {
+function newIpAdded() {
     
     //we will need to send a request to check that there is a charger at the given IP
     var whoAmIReq = new XMLHttpRequest();
@@ -48,7 +50,7 @@ function newIpAdded(event) {
 
     //construct the body, we just need to send a get request to who_am_i
     var httpBody = new Object();
-    httpBody.url = whoAmIReq.url;
+    httpBody.location = whoAmIReq.url;
     httpBody.type = "GET";
 
     //send the request, this goes to the Python server
@@ -121,7 +123,7 @@ function setConfigInfo(ipAddress, version) {
 
     //construct the body
     var httpBody = new Object();
-    httpBody.url = setConfigReq.url;
+    httpBody.location = setConfigReq.url;
     httpBody.type = "POST";
     httpBody.body = JSON.stringify(configuration);
 
@@ -165,7 +167,7 @@ function getCellsInfo() {
 
     //construct the body of the request we want to send, this is the info sent to the server
     var httpBody = new Object();
-    httpBody.url = cellsInfoReq.url;
+    httpBody.location = cellsInfoReq.url;
     httpBody.type = "POST";
     httpBody.body = JSON.stringify({"settings": [{"charger_id" : this.number}]})
 
@@ -204,10 +206,103 @@ function returnedCellsInfo() {
     }
 }
 
-function updatePortNumber() {
-    portEntry = document.querySelector('#portentry');
-    portVal = portEntry.value;
-    console.log(portVal)
+/**
+ * search for a server with the port number entered
+ */
+function portNumberEntered() {
+    var portEntry = document.querySelector('#port-entry');
+    port = portEntry.value;
+    portEntry.value = ""; //clear the entry
+    searchPort(port, false);
+}
+
+/**
+ * function for when a port search has a successful response, checks that it was indeed our server
+ */
+function portFound() {
+    if (this.readyState === 4) {
+        if (this.status == 200) { //OK RESPONSE
+            var response = JSON.parse(this.responseText);
+            //we send back a json with a 'discover' field, if this exists, then it was our server
+            if (response.discover != null) {
+                var portStatus = document.querySelector('#port-status');
+                portStatus.innerHTML = "Connected to server with port " + this.port;
+                serverPort = this.port;
+            } else {
+                failedPortFind(this.port, this.searching);
+            }
+        } else {
+            failedPortFind(this.port, this.searching);
+        }
+    }
+}
+
+/**
+ * Function for when finding a port failed. Checks for if there are more ports to search and
+ * continues searching if required, otherwise sets an error message in the status bar and sets
+ * the global serverPort to -1 to indicate there is no server running
+ * @param port - which port is being searched
+ * @param searching - whether we are in the process of doing an overall search
+ */
+function failedPortFind(port, searching) {
+    //get the port status bar, likely going to be updated
+    var portStatus = document.querySelector('#port-status');
+    //first check for if we are searching. 
+    if (searching == true) {
+        //if we are searching, find the index of the port we have searched for
+        var index = -1;
+        for (var i = 0 ; i < portList.length; i++) {
+            if (portList[i] == port) {
+                index = i;
+                break;
+            }
+        }
+        //check the index
+        if (index < -1 || index == portList.length - 1) {
+            portStatus.innerHTML = "Search for server failed. Make sure the server is running.";
+        } else {
+            searchPort(portList[index+1], searching);
+        }
+        
+    } else {
+        //If we aren't searching, then one fail just means to fail
+        portStatus.innerHTML = "Could not connected to server with port " + port + ". Make sure the server is running";
+    }
+    serverPort = -1; //we have had a fail, update the port to be unknown
+}
+
+/**
+ * search for a server with a given port number
+ * @param port - the port to search for the server on
+ * @param searching - true if we are in the process of doing a search through the portList, false if just searching for one port
+ */
+function searchPort(port, searching) {
+    //update the user display
+    var portStatus = document.querySelector('#port-status');
+    portStatus.innerHTML = "Searching for server"
+    //we will need to send a request to check that there is a server running at the given port
+    var discoverReq = new XMLHttpRequest();
+    discoverReq.port = port; //save to the object to use if successful
+    discoverReq.searching = searching; //save whether or not we are searching
+    discoverReq.onload = portFound; //the response will be handled in the portFound function
+    discoverReq.onerror = function() {
+        failedPortFind(port, searching);
+    }
+    discoverReq.open("POST", serverLocation + port);
+    discoverReq.setRequestHeader("Content-Type", "application/json");
+
+    //construct the body, we just need to send a get request to who_am_i
+    var httpBody = new Object();
+    httpBody.type = "DISCOVER";
+
+    //send the request, this goes to the Python server
+    discoverReq.send(JSON.stringify(httpBody));
+
+    console.log('port request sent to ' + port);
+}
+
+function startup() {
+    searchPort(portList[0], true); //search for a server to connect to
 }
 
 ////////////////////////////////////////DISPLAY CODE/////////////////////////////////////////
@@ -383,7 +478,8 @@ function updateBatteryDisplay(battery, voltageReading) {
 
 
 
-
 ///////////////////////////////////////EVENTS/////////////////////////////////////
 addChargerButton.addEventListener('click', newIpAdded, false);
-portChangeButton.addEventListener('click', updatePortNumber, false);
+portChangeButton.addEventListener('click', portNumberEntered, false);
+portSearchButton.addEventListener('click', function(){searchPort(portList[0], true)}, false);
+document.addEventListener('DOMContentLoaded', startup, false);

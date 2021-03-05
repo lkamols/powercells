@@ -1,0 +1,6 @@
+[SETTINGS]
+hostname = localhost
+ports = 8080,56490,56501
+timeout = 4
+origins = null, lkamols@github.io/powercells
+

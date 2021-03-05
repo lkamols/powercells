@@ -10,16 +10,22 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
 import json
 import configparser
-import sys
+import socket
+from contextlib import closing
 
-hostName = "localhost"
-serverPort = 8080
-TIMEOUT = 4
+#DEFAULT VALUES FOR CONFIGURATION RECOVERY
+DEFAULTS = {
+        "ports" : "8080, 57923",
+        "timeout" : "4",
+        "origins" : "null, lkamols@github.io/powercells"}
 
+HOSTNAME = "localhost" #this is entirely designed to run on localhost so don't need to consider others
+
+#CONFIGURATION FILE LOCATIONS
 CONFIG_FILE_LOCATION = "config.txt"
-CONFIG_SECTION_TITLE = "SETUP"
+CONFIG_SECTION_TITLE = "SETTINGS"
+CONFIGURATION_READ_ATTEMPTS = 10 #just a bound on the attempts to read configuration file, avoids a while(1)
 
-acceptedOrigins = ["https://lkamols.github.io", "null"] #NEED TO CHANGE THIS BEFORE RELEASE TO REMOVE NULL
 
 class MyServer(BaseHTTPRequestHandler):
     
@@ -36,6 +42,7 @@ class MyServer(BaseHTTPRequestHandler):
         print("Options request received")
         if not self.valid_origin():
             print("invalid origin - request denied")
+            return
             
         #we know that it was sent from a valid origin, allow this origin and for POST requests with jsons
         self.send_response(200, "OK")
@@ -59,6 +66,7 @@ class MyServer(BaseHTTPRequestHandler):
         #start with a check to ensure that the origin is accepted
         if not self.valid_origin():
             print("invalid origin - request denied")
+            return
         
         #now unpack the post request into a json
         content_len = int(self.headers.get('Content-Length'))
@@ -97,26 +105,86 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()       
 
-
-if __name__ == "__main__":    
-    #set up the configuration, do this in a loop, if there is ever an issue, fix it and restart
-    while(True):
+"""
+reads the configuration file, returning the configuration object and the settings section dictionary
+if the configuration file does not exist or is missing the section header, creates a new one
+"""
+def read_configuration_file():
+    for attempt in range(CONFIGURATION_READ_ATTEMPTS):
         try:
             config = configparser.ConfigParser()
-            config.read_file(open(CONFIG_FILE_LOCATION, 'r'))
-            setup = config[CONFIG_SECTION_TITLE]
+            with open(CONFIG_FILE_LOCATION, 'r') as config_file:
+                config.read_file(config_file)
+            settings = config[CONFIG_SECTION_TITLE]
+            return config, settings
         except FileNotFoundError:
             print("{0} did not exist, creating it".format(CONFIG_FILE_LOCATION))
-            #create the file and leave it empty
-            newfile = open(CONFIG_FILE_LOCATION, 'w')
-            newfile.close()
+            create_empty_config()
         except KeyError:
-            print("no [{0}] header in config.txt file".format(CONFIG_SECTION_TITLE))
-        except configparser.NoSectionError:
-            pass
+            print("{0} section did not exist, creating it".format(CONFIG_SECTION_TITLE))
+            create_empty_config()    
+
+"""
+create an empty configuration file, with the section title
+"""
+def create_empty_config():
+    #if this doesn't work, we can't really recover from it, just accept the exception, very unlikely
+    newfile = open(CONFIG_FILE_LOCATION, 'w')
+    newfile.write("[{0}]".format(CONFIG_SECTION_TITLE))
+    newfile.close()
     
-    webServer = HTTPServer((hostName, serverPort), MyServer)
-    print("Server started http://%s:%s" % (hostName, serverPort))
+"""
+read in the configuration file and recover any missing information
+settings - the settings configuration dictionary
+"""    
+def fill_default_values(settings):
+    #go through the defaults dictionary and load any values if they don't exist
+    for setting in DEFAULTS:
+        if settings.get(setting) == None:
+            settings[setting] = DEFAULTS[setting]
+        
+"""
+returns an available port number to be used, gives priority to the ports in the settings
+"""    
+def get_available_port(settings):
+    #first collect all the lists, configuration file only has strings, so convert to an int list
+    port_list = [int(s.strip()) for s in settings["ports"].split(',')]
+    
+    #check the existing list of ports for one that is available
+    for port in port_list:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as dummy_socket:
+            location = ('127.0.0.1', port)
+            if dummy_socket.connect_ex(location) != 0:
+                #the connection was unsuccessful - so it doesn't exist and we can use it
+                return port #assign this as the used port
+    else:
+        #no ports were found, assign one using the socket assignment system
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as dummy_socket:
+            dummy_socket.bind(('',0)) 
+            port = dummy_socket.getsockname()[1]
+            #update the settings list
+            settings["ports"] += ",{0:.0f}".format(port)
+            return port
+
+if __name__ == "__main__":    
+    #set up the configuration file and ensure it exists
+    config, settings = read_configuration_file()
+    
+    #then fill in any missing default values
+    fill_default_values(settings)
+    
+    #determine which port to use
+    port = get_available_port(settings)
+    print("The port being used is: {0:.0f}".format(port))
+        
+    
+    #update the configuration file
+    with open(CONFIG_FILE_LOCATION, 'w') as config_file:
+        config.write(config_file)
+
+    
+    webServer = HTTPServer((HOSTNAME, port), MyServer)
+    print("Server started http://%s:%s" % (HOSTNAME, port))
 
     try:
         webServer.serve_forever()

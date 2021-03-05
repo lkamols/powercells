@@ -15,9 +15,10 @@ from contextlib import closing
 
 #DEFAULT VALUES FOR CONFIGURATION RECOVERY
 DEFAULTS = {
-        "ports" : "8080, 57923",
+        "ports" : "8080, 57923, 54782, 63342, 50124",
         "timeout" : "4",
-        "origins" : "null, lkamols@github.io/powercells"}
+        "origins" : "null, lkamols@github.io/powercells"
+        }
 
 HOSTNAME = "localhost" #this is entirely designed to run on localhost so don't need to consider others
 
@@ -26,6 +27,9 @@ CONFIG_FILE_LOCATION = "config.txt"
 CONFIG_SECTION_TITLE = "SETTINGS"
 CONFIGURATION_READ_ATTEMPTS = 10 #just a bound on the attempts to read configuration file, avoids a while(1)
 
+#variables that are needed inside the server class, make them Python global, will be overridden
+acceptedOrigins = []
+timeout = 0
 
 class MyServer(BaseHTTPRequestHandler):
     
@@ -59,7 +63,13 @@ class MyServer(BaseHTTPRequestHandler):
         return
         
     """
-    respond to post requests, should be json requests
+    respond to post requests, should be json requests. 
+    This will respond to the post request by performing an action on the local network, given by the 'type'
+    field in the received post request. Possible options
+    GET - perform a get request on the local network and forward the response, with 'url'
+    POST - perform a post request on the local network and forward the response, with 'url' and 'body'
+    READ - read a json from the given file
+    WRITE - write a json to the given file
     """
     def do_POST(self):
         print("Post request received")
@@ -74,22 +84,30 @@ class MyServer(BaseHTTPRequestHandler):
         request = json.loads(received_body)
         
         #unpack the json to receive the important information, namely the type of request,
-        #the url to send it to and the body of the request
+        #the location to send it to and the body of the request
         request_type = request.get("type")
-        url = request.get("url")
-        body_to_send = request.get("body")
+        location = request.get("location") #this will be a url for GET,POST or a filename for READ,WRITE
+        body = request.get("body")
         
         #do some error checking
-        if request_type == None or url == None:
-            print("Missing a request type or a url")
+        if request_type == None or location == None:
+            print("Missing a request type or location field")
             return
         
         #send through the request to the charger now and get its response
         try:
             if request_type == "GET":
-                response = requests.get(url, timeout=TIMEOUT)
+                #send a get request, then we will use the content of that to respond to the server
+                response_body = requests.get(location, timeout=timeout).content
             elif request_type == "POST":
-                response = requests.post(url, data=body_to_send, timeout=TIMEOUT)
+                #send a get request, then we will use the content of that to respond to the server
+                response_body = requests.post(location, data=body, timeout=timeout).content
+            elif request_type == "READ":
+                with open(location, "r") as read_file:
+                    response_body = json.load(read_file)
+            elif request_type == "WRITE":
+                with open(location, "w") as write_file:
+                    json.dump(body, write_file)
             else:
                 print("invalid request type")
                 return
@@ -98,12 +116,17 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()
-            self.wfile.write(response.content)
+            self.wfile.write(response_body)
         except requests.exceptions.RequestException:
             print("Request had an exception - likely incorrect ip address")
             self.send_response(404)
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
-            self.end_headers()       
+            self.end_headers()  
+        except FileNotFoundError as e:
+            print("Requested file {0} not found".format(e))
+            self.send_response(404)
+            self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
+            self.end_headers() 
 
 """
 reads the configuration file, returning the configuration object and the settings section dictionary
@@ -182,6 +205,9 @@ if __name__ == "__main__":
     with open(CONFIG_FILE_LOCATION, 'w') as config_file:
         config.write(config_file)
 
+    #set some global variables because they are needed for running the server
+    acceptedOrigins = [s.strip() for s in settings["origins"].split(',')]
+    timeout = int(settings["timeout"])
     
     webServer = HTTPServer((HOSTNAME, port), MyServer)
     print("Server started http://%s:%s" % (HOSTNAME, port))

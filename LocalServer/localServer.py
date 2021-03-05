@@ -10,10 +10,14 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
 import json
 import configparser
+import sys
 
 hostName = "localhost"
 serverPort = 8080
 TIMEOUT = 4
+
+CONFIG_FILE_LOCATION = "config.txt"
+CONFIG_SECTION_TITLE = "SETUP"
 
 acceptedOrigins = ["https://lkamols.github.io", "null"] #NEED TO CHANGE THIS BEFORE RELEASE TO REMOVE NULL
 
@@ -87,15 +91,30 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()
             self.wfile.write(response.content)
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             print("Request had an exception - likely incorrect ip address")
             self.send_response(404)
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
-            self.end_headers()
-        
+            self.end_headers()       
 
 
-if __name__ == "__main__":        
+if __name__ == "__main__":    
+    #set up the configuration, do this in a loop, if there is ever an issue, fix it and restart
+    while(True):
+        try:
+            config = configparser.ConfigParser()
+            config.read_file(open(CONFIG_FILE_LOCATION, 'r'))
+            setup = config[CONFIG_SECTION_TITLE]
+        except FileNotFoundError:
+            print("{0} did not exist, creating it".format(CONFIG_FILE_LOCATION))
+            #create the file and leave it empty
+            newfile = open(CONFIG_FILE_LOCATION, 'w')
+            newfile.close()
+        except KeyError:
+            print("no [{0}] header in config.txt file".format(CONFIG_SECTION_TITLE))
+        except configparser.NoSectionError:
+            pass
+    
     webServer = HTTPServer((hostName, serverPort), MyServer)
     print("Server started http://%s:%s" % (hostName, serverPort))
 

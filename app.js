@@ -34,6 +34,19 @@ const configuration = {
     LmD: 1.1 //????????????
 }
 
+//possible states
+const batteryState = {
+    START: "start",
+    MEASURE_VOLTAGE: "measure voltage",
+    INITIAL_CHARGE: "initial charge",
+    REST: "rest",
+    MEASURE_DROP: "measure drop",
+    DISCHARGE: "discharge",
+    MEASURE_CAPACITY: "measure capacity",
+    FINAL_CHARGE: "final charge",
+    FINISH: "finish"
+}
+
 /**
  * a new ip address has been entered by the user
  */
@@ -124,12 +137,10 @@ function readFromFile(filename) {
         var readReq = new XMLHttpRequest();
         //now construct the actual request
         readReq.onload = function() {
-            console.log(readReq.responseText);
-            console.log("READ: " + JSON.parse(readReq.responseText));
             if (readReq.status == 200) {
                 resolve(JSON.parse(readReq.responseText));
             } else {
-                reject(readReq.statusText);
+                reject("file not found");
             }
         }
         readReq.onerror = function() {
@@ -155,6 +166,7 @@ function readFromFile(filename) {
  */
 function readIpAddresses() {
     readFromFile(IP_ADDRESSES_FILENAME).then(function(data){
+        //this is the success function, iterate through all the given ip addresses and try them out
         if (data.ipAddresses != null) {
             for (var i = 0; i < data.ipAddresses.length; i++) {
                 testNewIp(data.ipAddresses[i], true);
@@ -231,7 +243,9 @@ function newChargerFound(ipAddress, version, searching) {
     var charger = createChargerObject(ipAddress);
     createChargerDisplay(charger);
     chargers.push(charger);
-    saveIpAddresses();
+    saveIpAddresses(); //push the new set of ip addresses to the server and save it
+    //now set up the interval when all of the get_cells_info calls will be made
+    setInterval(function() {getCellsInfo(charger)}, 5000);
 }
 
 /**
@@ -286,17 +300,16 @@ function setConfigResponse() {
 /**
  * Function for reading and updating the values, needs to be called with a bind to a charger
  */
-function getCellsInfo() {
+function getCellsInfo(charger) {
     var cellsInfoReq = new XMLHttpRequest();
     //use the known IP address to create the url
-    cellsInfoReq.url = "http://" + this.ipAddress + "/api/get_cells_info";
-    cellsInfoReq.charger = this; //pass through all the information about which charger we are dealing with
+    cellsInfoReq.url = "http://" + charger.ipAddress + "/api/get_cells_info";
+    cellsInfoReq.charger = charger; //pass through all the information about which charger we are dealing with
     cellsInfoReq.onload = returnedCellsInfo;
     cellsInfoReq.onerror = function() {
         updateChargerStatus(cellsInfoReq.charger, "Error communicating with server");
     }
-    
-    //cellsInfoReq.onerror TODO ADD THIS
+
     cellsInfoReq.open("POST", serverLocation + serverPort);
     cellsInfoReq.setRequestHeader("Content-Type", "application/json");
 
@@ -304,11 +317,118 @@ function getCellsInfo() {
     var httpBody = new Object();
     httpBody.location = cellsInfoReq.url;
     httpBody.type = "POST";
-    httpBody.body = JSON.stringify({"settings": [{"charger_id" : this.number}]})
+    httpBody.body = JSON.stringify({"settings": [{"charger_id" : charger.number}]})
 
     //send it off
     cellsInfoReq.send(JSON.stringify(httpBody));
-    console.log('cells info request sent to' + cellsInfoReq.url);
+    console.log('cells info request sent to ' + cellsInfoReq.url);
+}
+
+/**
+ * Send a set_cell request to the megacell charger. This updates the current charger settings
+ * @param charger - the charger in question
+ * @param settings - the settings to send, a list of (index, command) pairs
+ */
+function setCells(charger, settings) {
+    var setCellsReq = new XMLHttpRequest();
+    //use the known IP address to create the url
+    setCellsReq.url = "http://" + charger.ipAddress + "/api/set_cell";
+    setCellsReq.onload = function() {
+        if (setCellsReq.status == 200) {
+            console.log("cells set successfully");
+        } else {
+            updateChargerStatus(charger, "Error communicating with server");
+        }
+    }
+    setCellsReq.onerror = function() {
+        updateChargerStatus(charger, "Error communicating with server");
+    }
+
+    setCellsReq.open("POST", serverLocation + serverPort);
+    setCellsReq.setRequestHeader("Content-Type", "application/json");
+
+    //reformat the settings to be in the form required by the MegaCell charger
+    var settingsList = []
+    for (var i = 0; i < settings.length; i++) {
+        var batterySetting = new Object();
+        batterySetting.CiD = settings[i][0];
+        batterySetting.CmD = settings[i][1];
+        settingsList.push(batterySetting);
+    }
+
+    //construct the body of the request we want to send, this is the info sent to the server
+    var httpBody = new Object();
+    httpBody.location = setCellsReq.url;
+    httpBody.type = "POST";
+    httpBody.body = JSON.stringify({"cells": settingsList});
+    console.log(JSON.stringify({"cells": settingsList}));
+
+    //send it off
+    setCellsReq.send(JSON.stringify(httpBody));
+    console.log('set cells request sent to ' + setCellsReq.url);
+}
+
+/**
+ * The big boy. Runs the state machine for the charging process. After a get_cells_info call is made at a regular interval,
+ * this state machine takes the current states of the batteries and the returned statuses of the batteries to 
+ * assess the battery. 
+ * The current state is updated on the server if any changes are made to ensure we can never lose everything
+ * Any updates to the required state of the charger are sent as a batch at the end
+ * @param charger - the charger in question
+ * @param info - the response from the megacell charger 
+ */
+function chargerStateMachine(charger, info) {
+    var anyStateChange = false; //track if any changes to the state are made
+    var cellSettings = []; //any changes to the setting of cells
+    info.forEach(function(entry) {
+        var i = entry["CiD"]; //get the index of the battery we are dealing with
+        var batteryInfo = charger.info[i];
+        var status = entry["status"].toLowerCase(); //get the status (lowercase to avoid annoying capitalisation errors)
+        switch(batteryInfo.state) {
+            case batteryState.START:
+                switch (status) {
+                    case "idle":
+                    case "new cell inserted":
+                        batteryInfo.state = batteryState.MEASURE_VOLTAGE;
+                        anyStateChange = true;
+                        break;
+                    case "not inserted":
+                        //do nothing in this case, remain in this state
+                        break;
+                    default:
+                        //unexpected case
+                        updateBatteryStatus(charger, i, status + " (UNEXPECTED)");
+                }
+                break;
+            case batteryState.MEASURE_VOLTAGE:
+                //if we are in the measure voltage state, we make a measurement of the voltage, store it and move to the next state
+                batteryInfo.startVoltage = entry["voltage"];
+                batteryInfo.state = batteryState.INITIAL_CHARGE;
+                anyStateChange = true;
+                //send an "ach" to the charger to start charging
+                cellSettings.push([i, "ach"]);
+                break;
+        }
+    });
+    //now that all the state logic has been done for all the different states, do the final two steps
+    //if any change has been made to the state, ensure that this is updated on the server
+    if (anyStateChange) {
+        writeToFile(charger.ipAddress + ".txt", charger.info); //write the whole state to the file
+    }
+    //if there are any set cells information that needs to be sent, send it all together
+    if (cellSettings.length > 0) {
+        setCells(charger, cellSettings);
+    }
+}
+
+/**
+ * update the display of the battery within charger at index index, and show the status
+ * @param charger - the charger
+ * @param index - the index of the battery
+ * @param status - the status to update it to
+ */
+function updateBatteryStatus(charger, index, status) {
+    charger.batteries[index].querySelector(".battery-status").innerHTML = "Status: " + status;
 }
 
 /**
@@ -320,20 +440,16 @@ function returnedCellsInfo() {
             var charger = this.charger; //required to pass the value into the anonymous function
             var response = JSON.parse(this.responseText);
             var info = response["cells"]; //unpack the first layer of the returned json
-            //go through all of the batteries and update their display
-            for (var i = 0; i < NUM_BATTERIES; i++) {
-                //all info is returned as an array, to be safe, don't assume they are ordered, so go through them all
-                //until we find a "CiD" with the correct number, inefficient but safer to updates
-                info.forEach(function(entry) {
-                    if (entry["CiD"] == i) {
-                        //update the status
-                        charger.batteries[i].querySelector(".battery-status").innerHTML = "Status: " + entry["status"];
-                        //also update the progress display
-                        updateBatteryDisplay(charger.batteries[i].querySelector(".battery-display-foreground"), entry["voltage"]);
-                        return;
-                    }
-                })
-            }
+            //iterate through each of the entries to update the display
+            info.forEach(function(entry) {
+                var i = entry["CiD"]; //retrieve the index
+                //update the status
+                updateBatteryStatus(charger, i, entry["status"]);
+                //also update the progress display
+                updateBatteryDisplay(charger.batteries[i].querySelector(".battery-display-foreground"), entry["voltage"]);
+            });
+            //also go through the battery state machine for each battery
+            chargerStateMachine(charger, info);
             updateChargerStatus(charger, "Charger Working");
         } else {
             updateChargerStatus(charger, "Error communicating with charger");
@@ -457,7 +573,26 @@ function createChargerObject(ipAddress) {
     charger.ipAddress = ipAddress;
     charger.batteries = [];
     charger.number = chargers.length; //index it
+    readFromFile(ipAddress + ".txt").then(function(data) {
+        charger.info = data; //if there is something there, just load it directly
+    }, function() {
+        freshState(charger); //if there is nothing there, load a fresh state
+    });
     return charger;
+}
+
+/**
+ * 
+ * @param charger - the charger to add the state for
+ */
+function freshState(charger) {
+    charger.info = new Object(); //create a dictionary for each of the objects, so it can be JSONed
+    //iterate through all the batteries and start them in the START state
+    for (var i = 0; i < NUM_BATTERIES; i++) {
+        var newBattery = new Object();
+        newBattery.state = batteryState.START;
+        charger.info[i] = newBattery;
+    }
 }
 
 /**
@@ -503,7 +638,7 @@ function createChargerStatusDisplay(charger, aboveContainer) {
     var readButton = document.createElement("button");
     readButton.className = "read-btn";
     readButton.innerHTML = "Get Battery Status";
-    readButton.addEventListener("click", getCellsInfo.bind(charger), false);
+    readButton.addEventListener("click", function() {getCellsInfo(charger)}, false);
     statusContainer.appendChild(readButton);
 
     //create the 'status' area to use if needed to give updates about an individual charger
@@ -583,7 +718,6 @@ function createIndividualBatteryDisplay(index) {
  * @param message the text to put as the charger status
  */
 function updateChargerStatus(charger, message) {
-    console.log(charger.container);
     var status = charger.container.querySelector(".charger-status");
     status.style.visibility = "visible";
     status.innerHTML = message;
@@ -621,8 +755,6 @@ function updateBatteryDisplay(battery, voltageReading) {
     var green = Math.floor(255 * (Math.min(100, 2*percentage)) / 100);
     battery.style.backgroundColor = `rgb(${red},${green},0)`;
 }
-
-
 
 ///////////////////////////////////////EVENTS/////////////////////////////////////
 addChargerButton.addEventListener('click', ipAddressEntered, false);

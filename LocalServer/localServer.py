@@ -102,7 +102,7 @@ class MyServer(BaseHTTPRequestHandler):
                 #send a get request, then we will use the content of that to respond to the server
                 response_body = requests.get(location, timeout=timeout).content
             elif request_type == "POST":
-                #send a get request, then we will use the content of that to respond to the server
+                #send a post request, then we will use the content of that to respond to the server
                 response_body = requests.post(location, data=body, timeout=timeout).content
             elif request_type == "READ":
                 with open(location, "r") as read_file:
@@ -123,7 +123,6 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()
             if response_body != None:
-                print(response_body)
                 self.wfile.write(response_body)
         except requests.exceptions.RequestException:
             print("Request had an exception - likely incorrect ip address")
@@ -131,7 +130,7 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()  
         except FileNotFoundError as e:
-            print("Requested file {0} not found".format(e))
+            print("Requested file not found: {0}".format(e))
             self.send_response(404)
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers() 

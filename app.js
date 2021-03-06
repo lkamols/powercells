@@ -8,6 +8,7 @@ var serverPort = -1; //-1 means we haven't found a port yet
 const addChargerButton = document.querySelector('#add-btn');
 const portChangeButton = document.querySelector('#port-btn');
 const portSearchButton = document.querySelector('#search-port-btn');
+const ipSearchButton = document.querySelector("#search-ip-btn");
 
 const chargers = [];
 const NUM_BATTERIES = 16;
@@ -32,20 +33,43 @@ const configuration = {
 }
 
 /**
- * new IP address added
+ * a new ip address has been entered by the user
  */
-function newIpAdded() {
+function ipAddressEntered() {
+    var ipEntry = document.getElementById("ipentry");
+    var ipAddress = ipEntry.value;
+    ipEntry.value = ""; //clear the entry field
+    var ipStatus = document.getElementById("enter-status");
+    ipStatus.innerHTML = "testing new IP: " + ipAddress;
+    testNewIp(ipAddress, false);
+}
+
+function searchIpAddresses() {
+    var ipStatus = document.getElementById("enter-status");
+    ipStatus.innerHTML = "searching for new chargers";
+    for (var i = 0; i < 256; i++) {
+        testNewIp("192.168.0." + i, true);
+    }
+}
+
+/**
+ * function for testing if a new IP address.
+ * @param ipAddress - the ip address to test
+ * @param searching - whether we are currently doing a mass search, if we are searching, don't update the status
+ */
+function testNewIp(ipAddress, searching) {
     
     //we will need to send a request to check that there is a charger at the given IP
     var whoAmIReq = new XMLHttpRequest();
     //get the requested IP and change it to a url for the who_am_i request
-    whoAmIReq.enteredIp = document.getElementById("ipentry").value;
-    whoAmIReq.url = "http://" + whoAmIReq.enteredIp + "/api/who_am_i";
+    whoAmIReq.ipAddress = ipAddress;
+    whoAmIReq.searching = searching; //save this to use in the onload function
+    whoAmIReq.url = "http://" + whoAmIReq.ipAddress + "/api/who_am_i";
     whoAmIReq.onload = whoAmIResponse; //the response will be handled in the whoAmIResponse function
     whoAmIReq.onerror = function() {
-        failedChargerAdd(this.enteredIp, "failed to connect to server at " + serverLocation + port);
+        failedChargerAdd(this.ipAddress, "failed to connect to server at " + serverLocation + serverPort, searching);
     }
-    whoAmIReq.open("POST", serverLocation + port);
+    whoAmIReq.open("POST", serverLocation + serverPort);
     whoAmIReq.setRequestHeader("Content-Type", "application/json");
 
     //construct the body, we just need to send a get request to who_am_i
@@ -56,7 +80,7 @@ function newIpAdded() {
     //send the request, this goes to the Python server
     whoAmIReq.send(JSON.stringify(httpBody));
 
-    console.log('who_am_i request sent to ' + whoAmIReq.enteredIp);
+    console.log('who_am_i request sent to ' + whoAmIReq.ipAddress);
 }
 
 /**
@@ -70,14 +94,14 @@ function whoAmIResponse() {
             //could add some versioning checks in here
             if (response.McC != null) {
                 //who_am_i request successful, now send a configuration request
-                setConfigInfo(this.enteredIp, response.McC);
+                setConfigInfo(this.ipAddress, response.McC);
             } else {
-                failedChargerAdd(this.enteredIp, "address " + this.enteredIp + " did not respond to who_am_i request");
+                failedChargerAdd(this.ipAddress, "address " + this.ipAddress + " did not respond to who_am_i request", this.searching);
             }
         } else if (this.status == 404) { //send back 404 if we made connection to the server but it could not contact the charger
-            failedChargerAdd(this.enteredIp, "no charger found at " + this.enteredIp);
+            failedChargerAdd(this.ipAddress, "no charger found at " + this.ipAddress, this.searching);
         } else {
-            failedChargerAdd(this.enteredIp, "unexpected status response: " + this.status + " at " + this.enteredIp);
+            failedChargerAdd(this.ipAddress, "unexpected status response: " + this.status + " at " + this.ipAddress, this.searching);
         }
     }
 }
@@ -87,14 +111,14 @@ function whoAmIResponse() {
  * @param ipAddress - the ip address of the charger
  * @param version - the firmware version of the charger
  */
-function newChargerFound(ipAddress, version) {
+function newChargerFound(ipAddress, version, searching) {
     console.log("who_am_i and set_config_info successful from " + ipAddress)
 
     //update the status bar
-    var statusBar = document.getElementById("enter-status");
-    statusBar.style.visibility = "visible";
-    statusBar.textContent = "MegaCell charger at IP " + ipAddress + " with " + version + " added";
-
+    if (!searching) {
+        var statusBar = document.getElementById("enter-status");
+        statusBar.textContent = "MegaCell charger at IP " + ipAddress + " with " + version + " added";
+    }
     //now create the object for the charger and its display
     var charger = createChargerObject(ipAddress);
     createChargerDisplay(charger);
@@ -105,20 +129,22 @@ function newChargerFound(ipAddress, version) {
  * Send a set_config_info request to the charger to ensure it has the correct settings
  * @param ipAddress - the ip address of the charger
  * @param version - the version of the charger
+ * @param searching - whether or not this config info set up is part of a search for IP addresses
  */
-function setConfigInfo(ipAddress, version) {
+function setConfigInfo(ipAddress, version, searching) {
     
     var setConfigReq = new XMLHttpRequest();
-    //add the ip address and version to the request so they can be recovered in the response
+    //add the ip address, version and searching boolean to the request so they can be recovered in the response
     setConfigReq.ipAddress = ipAddress;
     setConfigReq.version = version;
+    setConfigReq.searching = searching;
     //now construct the actual request
     setConfigReq.url = "http://" + ipAddress + "/api/set_config_info";
     setConfigReq.onload = setConfigResponse; //the response will be handled by this function
     setConfigReq.onerror = function() {
-        failedChargerAdd(this.enteredIp, "Failed to connect to server at " + serverLocation + port);
+        failedChargerAdd(this.ipAddress, "Failed to connect to server at " + serverLocation + serverPort, this.searching);
     }
-    setConfigReq.open("POST", serverLocation + port);
+    setConfigReq.open("POST", serverLocation + serverPort);
     setConfigReq.setRequestHeader("Content-Type", "application/json");
 
     //construct the body
@@ -140,9 +166,9 @@ function setConfigResponse() {
         if (this.status == 200) { //OK RESPONSE
             newChargerFound(this.ipAddress, this.version);
         } else if (this.status == 404) { //send back 404 if we made connection to the server but it could not contact the charger
-            failedChargerAdd(this.enteredIp, "no charger found at " + this.enteredIp);
+            failedChargerAdd(this.ipAddress, "no charger found at " + this.ipAddress, this.searching);
         } else {
-            failedChargerAdd(this.enteredIp, "unexpected status response: " + this.status + " at " + this.enteredIp);
+            failedChargerAdd(this.ipAddress, "unexpected status response: " + this.status + " at " + this.ipAddress, this.searching);
         }
     }    
 }
@@ -162,7 +188,7 @@ function getCellsInfo() {
     }
     
     //cellsInfoReq.onerror TODO ADD THIS
-    cellsInfoReq.open("POST", serverLocation + port);
+    cellsInfoReq.open("POST", serverLocation + serverPort);
     cellsInfoReq.setRequestHeader("Content-Type", "application/json");
 
     //construct the body of the request we want to send, this is the info sent to the server
@@ -189,7 +215,7 @@ function returnedCellsInfo() {
             for (var i = 0; i < NUM_BATTERIES; i++) {
                 //all info is returned as an array, to be safe, don't assume they are ordered, so go through them all
                 //until we find a "CiD" with the correct number, inefficient but safer to updates
-                response["cells"].forEach(function(entry) {
+                info.forEach(function(entry) {
                     if (entry["CiD"] == i) {
                         //update the status
                         charger.batteries[i].querySelector(".battery-status").innerHTML = "Status: " + entry["status"];
@@ -301,6 +327,9 @@ function searchPort(port, searching) {
     console.log('port request sent to ' + port);
 }
 
+/**
+ * startup function, runs all processes that need to be run on startup
+ */
 function startup() {
     searchPort(portList[0], true); //search for a server to connect to
 }
@@ -452,12 +481,13 @@ function updateChargerStatus(charger, message) {
 /**
  * Function for displaying that the charger failed to add
  */
-function failedChargerAdd(ipAddress, reason) {
+function failedChargerAdd(ipAddress, reason, searching) {
     console.log("unsuccessful ip address addition of " + ipAddress)
     //update the status bar
-    var statusBar = document.getElementById("enter-status");
-    statusBar.style.visibility = "visible";
-    statusBar.textContent = reason;
+    if (!searching) {
+        var statusBar = document.getElementById("enter-status");
+        statusBar.textContent = reason;
+    }
 }
 
 
@@ -479,7 +509,8 @@ function updateBatteryDisplay(battery, voltageReading) {
 
 
 ///////////////////////////////////////EVENTS/////////////////////////////////////
-addChargerButton.addEventListener('click', newIpAdded, false);
+addChargerButton.addEventListener('click', ipAddressEntered, false);
 portChangeButton.addEventListener('click', portNumberEntered, false);
 portSearchButton.addEventListener('click', function(){searchPort(portList[0], true)}, false);
-document.addEventListener('DOMContentLoaded', startup, false);
+ipSearchButton.addEventListener('click', searchIpAddresses, false);
+document.addEventListener('DOMContentLoaded', startup, false); //run the startup function on load

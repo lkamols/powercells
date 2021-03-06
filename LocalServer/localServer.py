@@ -12,6 +12,7 @@ import json
 import configparser
 import socket
 from contextlib import closing
+from socketserver import ThreadingMixIn
 
 #DEFAULT VALUES FOR CONFIGURATION RECOVERY
 DEFAULTS = {
@@ -133,6 +134,10 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers() 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
+
+
 """
 reads the configuration file, returning the configuration object and the settings section dictionary
 if the configuration file does not exist or is missing the section header, creates a new one
@@ -214,7 +219,7 @@ if __name__ == "__main__":
     acceptedOrigins = [s.strip() for s in settings["origins"].split(',')]
     timeout = int(settings["timeout"])
     
-    webServer = HTTPServer((HOSTNAME, port), MyServer)
+    webServer = ThreadedHTTPServer((HOSTNAME, port), MyServer)
     print("Server started http://%s:%s" % (HOSTNAME, port))
 
     try:

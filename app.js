@@ -44,12 +44,18 @@ function ipAddressEntered() {
     testNewIp(ipAddress, false);
 }
 
+/**
+ * search through all IP addresses in the range 192.168.0.0 - 192.168.0.255
+ */
 function searchIpAddresses() {
     var ipStatus = document.getElementById("enter-status");
-    ipStatus.innerHTML = "searching for new chargers";
+    ipStatus.innerHTML = "searching for new chargers, this may take a few minutes";
+    //test each of the IP addresses in the range. start them all, they will be handled when the responses come in
     for (var i = 0; i < 256; i++) {
         testNewIp("192.168.0." + i, true);
     }
+    //send a dummy end one to tell when the search is complete, this will always fail
+    testNewIp("finish", true);
 }
 
 /**
@@ -94,7 +100,7 @@ function whoAmIResponse() {
             //could add some versioning checks in here
             if (response.McC != null) {
                 //who_am_i request successful, now send a configuration request
-                setConfigInfo(this.ipAddress, response.McC);
+                setConfigInfo(this.ipAddress, response.McC, this.searching);
             } else {
                 failedChargerAdd(this.ipAddress, "address " + this.ipAddress + " did not respond to who_am_i request", this.searching);
             }
@@ -112,7 +118,15 @@ function whoAmIResponse() {
  * @param version - the firmware version of the charger
  */
 function newChargerFound(ipAddress, version, searching) {
-    console.log("who_am_i and set_config_info successful from " + ipAddress)
+    console.log("who_am_i and set_config_info successful from " + ipAddress);
+
+    //check that the charger being found is a new one
+    for (var i = 0; i < chargers.length; i++) {
+        if (chargers[i].ipAddress == ipAddress) {
+            console.log("charger at IP " + ipAddress + " already stored");
+            return; //already there, exit
+        }
+    }
 
     //update the status bar
     if (!searching) {
@@ -164,7 +178,7 @@ function setConfigInfo(ipAddress, version, searching) {
 function setConfigResponse() {
     if (this.readyState === 4) {
         if (this.status == 200) { //OK RESPONSE
-            newChargerFound(this.ipAddress, this.version);
+            newChargerFound(this.ipAddress, this.version, this.searching);
         } else if (this.status == 404) { //send back 404 if we made connection to the server but it could not contact the charger
             failedChargerAdd(this.ipAddress, "no charger found at " + this.ipAddress, this.searching);
         } else {
@@ -483,10 +497,15 @@ function updateChargerStatus(charger, message) {
  */
 function failedChargerAdd(ipAddress, reason, searching) {
     console.log("unsuccessful ip address addition of " + ipAddress)
-    //update the status bar
+    //update the status bar if we aren't searching
     if (!searching) {
         var statusBar = document.getElementById("enter-status");
         statusBar.textContent = reason;
+    }
+    //check for the flag sent through to indicate the search is over
+    if (ipAddress == "finish") {
+        var statusBar = document.getElementById("enter-status");
+        statusBar.textContent = "search complete";      
     }
 }
 

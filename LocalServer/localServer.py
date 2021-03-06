@@ -106,10 +106,11 @@ class MyServer(BaseHTTPRequestHandler):
                 response_body = requests.post(location, data=body, timeout=timeout).content
             elif request_type == "READ":
                 with open(location, "r") as read_file:
-                    response_body = json.load(read_file)
+                    fileString = read_file.read()
+                    response_body = fileString.encode('utf-8')
             elif request_type == "WRITE":
                 with open(location, "w") as write_file:
-                    json.dump(body, write_file)
+                    write_file.write(body)
                 response_body = None #don't need to send any information in the response
             elif request_type == "DISCOVER":
                 response_body = '{"discover" : 1}'.encode('utf-8')
@@ -122,6 +123,7 @@ class MyServer(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin"))
             self.end_headers()
             if response_body != None:
+                print(response_body)
                 self.wfile.write(response_body)
         except requests.exceptions.RequestException:
             print("Request had an exception - likely incorrect ip address")

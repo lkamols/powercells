@@ -113,6 +113,89 @@ function whoAmIResponse() {
 }
 
 /**
+ * read from a file on the server
+ * @param filename - the filename of the file on the server to read from
+ */
+function readFromFile(filename) {
+    //we want to wait for this to return, so make it a promise
+    var promise = new Promise(function(resolve, reject) {
+        var readReq = new XMLHttpRequest();
+        //now construct the actual request
+        readReq.onload = function() {
+            console.log("READ: " + JSON.parse(readReq.responseText));
+            if (readReq.status == 200) {
+                resolve(readReq.responseText);
+            } else {
+                reject(readReq.statusText);
+            }
+            
+        }
+        readReq.onerror = function() {
+            reject("Error connecting to server for read request");
+        }
+        readReq.open("POST", serverLocation + serverPort);
+        readReq.setRequestHeader("Content-Type", "application/json");
+
+        //construct the body
+        var httpBody = new Object();
+        httpBody.location = filename;
+        httpBody.type = "READ";
+
+        //send off the request
+        readReq.send(JSON.stringify(httpBody));
+        console.log('read from ' + filename + ' sent');
+    });
+
+    promise.then(function(response) {
+        console.log("read response: " + JSON.parse(response).ipAddresses);
+    }, function(errorString) {
+        console.log("error reading file: " + errorString);
+    })
+}
+
+/**
+ * write to a file on the server
+ * @param filename - the filename to write to
+ * @param data - the data to send, as a javascript object, which will be converted to a json
+ */
+function writeToFile(filename, data) {
+    var writeReq = new XMLHttpRequest();
+    //now construct the actual request
+    writeReq.onload = function() {
+        console.log("write to " + filename + " succeeded"); //FLESH THIS OUT TO UPDATE AN ERROR STATUS ETC
+    }
+    writeReq.onerror = function() {
+        console.log("write to " + filename + " failed"); //FLESH THIS OUT TO UPDATE AN ERROR STATUS ETC
+    }
+    writeReq.open("POST", serverLocation + serverPort);
+    writeReq.setRequestHeader("Content-Type", "application/json");
+
+    //construct the body
+    var httpBody = new Object();
+    httpBody.location = filename;
+    httpBody.type = "WRITE";
+    httpBody.body = JSON.stringify(data);
+
+    //send off the request
+    writeReq.send(JSON.stringify(httpBody));
+    console.log('write to ' + filename + ' sent');
+}
+
+/**
+ * save the ip addresses to a file stored on the server
+ */
+function saveIpAddresses() {
+    var dict = new Object();
+    dict.ipAddresses = [];
+    //add all the IP addresses
+    for (var i = 0; i < chargers.length; i++) {
+        dict.ipAddresses.push(chargers[i].ipAddress);
+    }
+    writeToFile("ipAddresses.txt", dict);
+    readFromFile("ipAddresses.txt");
+}
+
+/**
  * function called when a successful who_am_i request is received from the given IP and a set_config_info request is successful
  * @param ipAddress - the ip address of the charger
  * @param version - the firmware version of the charger
@@ -137,6 +220,7 @@ function newChargerFound(ipAddress, version, searching) {
     var charger = createChargerObject(ipAddress);
     createChargerDisplay(charger);
     chargers.push(charger);
+    saveIpAddresses();
 }
 
 /**

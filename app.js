@@ -12,6 +12,7 @@ const ipSearchButton = document.querySelector("#search-ip-btn");
 
 const chargers = [];
 const NUM_BATTERIES = 16;
+const REST_TIME = 20 * 60 * 1000;
 
 const IP_ADDRESSES_FILENAME = "ipAddresses.txt";
 
@@ -384,6 +385,10 @@ function chargerStateMachine(charger, info) {
         var i = entry["CiD"]; //get the index of the battery we are dealing with
         var batteryInfo = charger.info[i];
         var status = entry["status"].toLowerCase(); //get the status (lowercase to avoid annoying capitalisation errors)
+        //before going into the switch statement, if there is ever a 'not inserted' we return to the start state
+        if (status == "not inserted") {
+            batteryInfo.state = batteryState.START;
+        }
         switch(batteryInfo.state) {
             case batteryState.START:
                 switch (status) {
@@ -407,6 +412,30 @@ function chargerStateMachine(charger, info) {
                 anyStateChange = true;
                 //send an "ach" to the charger to start charging
                 cellSettings.push([i, "ach"]);
+                break;
+            case batteryState.INITIAL_CHARGE:
+                //we are in the initial charge, we either keep going, or if we have reached the end, we go to the rest state
+                switch(status) {
+                    case "started charging":
+                        //do nothing, keep in the same state
+                        break;
+                    case "charged":
+                        //we are finished charging, go to the REST state, note down the time that this started for the rest state
+                        batteryInfo.state = batteryState.REST;
+                        anyStateChange = true;
+                        batteryInfo.restStartTime = new Date().getTime(); //get the time, measured in absolute milliseconds
+                        break;
+                    default:
+                        //unexpected case
+                        updateBatteryStatus(charger, i, status + " (UNEXPECTED)");
+                }
+                break;
+            case batteryState.REST:
+                //all we have to do in the rest state is wait until a period of time has passed
+                if (new Date().getTime() > batteryInfo.restStartTime + REST_TIME) {
+                    batteryInfo.state = batteryState.MEASURE_DROP;
+                    anyStateChange = true;
+                }
                 break;
         }
     });

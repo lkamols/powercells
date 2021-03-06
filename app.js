@@ -13,6 +13,8 @@ const ipSearchButton = document.querySelector("#search-ip-btn");
 const chargers = [];
 const NUM_BATTERIES = 16;
 
+const IP_ADDRESSES_FILENAME = "ipAddresses.txt";
+
 //configuration constants
 const configuration = {
     MaV: 4.2, //max voltage
@@ -113,7 +115,7 @@ function whoAmIResponse() {
 }
 
 /**
- * read from a file on the server
+ * read from a file on the server, returns a promise for reading a file
  * @param filename - the filename of the file on the server to read from
  */
 function readFromFile(filename) {
@@ -122,16 +124,16 @@ function readFromFile(filename) {
         var readReq = new XMLHttpRequest();
         //now construct the actual request
         readReq.onload = function() {
+            console.log(readReq.responseText);
             console.log("READ: " + JSON.parse(readReq.responseText));
             if (readReq.status == 200) {
-                resolve(readReq.responseText);
+                resolve(JSON.parse(readReq.responseText));
             } else {
                 reject(readReq.statusText);
             }
-            
         }
         readReq.onerror = function() {
-            reject("Error connecting to server for read request");
+            reject("connecting to server");
         }
         readReq.open("POST", serverLocation + serverPort);
         readReq.setRequestHeader("Content-Type", "application/json");
@@ -145,11 +147,21 @@ function readFromFile(filename) {
         readReq.send(JSON.stringify(httpBody));
         console.log('read from ' + filename + ' sent');
     });
+    return promise;
+}
 
-    promise.then(function(response) {
-        console.log("read response: " + JSON.parse(response).ipAddresses);
-    }, function(errorString) {
-        console.log("error reading file: " + errorString);
+/**
+ * Read the ip addresses stored in the server and add any that exist
+ */
+function readIpAddresses() {
+    readFromFile(IP_ADDRESSES_FILENAME).then(function(data){
+        if (data.ipAddresses != null) {
+            for (var i = 0; i < data.ipAddresses.length; i++) {
+                testNewIp(data.ipAddresses[i], true);
+            }
+        }
+    }, function(error) {
+        console.log("Error trying to gather ip addresses from server: " + error);
     })
 }
 
@@ -191,8 +203,7 @@ function saveIpAddresses() {
     for (var i = 0; i < chargers.length; i++) {
         dict.ipAddresses.push(chargers[i].ipAddress);
     }
-    writeToFile("ipAddresses.txt", dict);
-    readFromFile("ipAddresses.txt");
+    writeToFile(IP_ADDRESSES_FILENAME, dict);
 }
 
 /**
@@ -359,6 +370,8 @@ function portFound() {
             failedPortFind(this.port, this.searching);
         }
     }
+    //try to populate any chargers
+    readIpAddresses();
 }
 
 /**

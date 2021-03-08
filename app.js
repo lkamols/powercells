@@ -12,7 +12,8 @@ const ipSearchButton = document.querySelector("#search-ip-btn");
 
 const chargers = [];
 const NUM_BATTERIES = 16;
-const REST_TIME = 20 * 60 * 1000;
+const REST_TIME = 20 * 60 * 1000; //the time that the batteries are rested fro, in milliseconds
+const STATE_TIME = 20 * 1000; //the time between passes of the state machine, in milliseconds
 
 const IP_ADDRESSES_FILENAME = "ipAddresses.txt";
 
@@ -20,7 +21,7 @@ const IP_ADDRESSES_FILENAME = "ipAddresses.txt";
 const configuration = {
     MaV: 4.2, //max voltage
     StV: 3.7, //store voltage
-    MiV: 3.2, //min voltage
+    MiV: 3, //min voltage
     DiR: 500, //max discharge?
     MaT: 40, //max temperature
     DiC: 1, //discharge cycles
@@ -437,6 +438,61 @@ function chargerStateMachine(charger, info) {
                     anyStateChange = true;
                 }
                 break;
+            case batteryState.MEASURE_DROP:
+                //measure the drop and record the ESR
+                batteryInfo.dropVoltage = entry["voltage"];
+                batteryInfo.esr = entry["esr"];
+                //move to the discharge state
+                batteryInfo.state = batteryState.DISCHARGE;
+                anyStateChange = true;
+                //instruct the battery to start charging
+                cellSettings.push([i,"adc"]);
+                break;
+            case batteryState.DISCHARGE:
+                switch(status) {
+                    case "started discharging":
+                        //do nothing, remain in this state until discharging has finished
+                        break;
+                    case "discharged":
+                        //move to the measure capacity state
+                        batteryInfo.state = batteryState.MEASURE_CAPACITY;
+                        anyStateChange = true;
+                        break;
+                    default:
+                        //unexpected case
+                        updateBatteryStatus(charger, i, status + " (UNEXPECTED)");
+                }
+                break;
+            case batteryState.MEASURE_CAPACITY:
+                //record the capacity measurements
+                batteryInfo.capacity = entry["capacity"];
+                batteryInfo.chargeCapacity = entry["chargeCapacity"];
+                //move to the final charge state
+                batteryInfo.state = batteryState.FINAL_CHARGE;
+                anyStateChange = true;
+                //send the setting to charge to the charger
+                cellSettings.push([i, "ach"]);
+                break;
+            case batteryState.FINAL_CHARGE:
+                switch(status) {
+                    case "started charging":
+                        //do nothing, remain in this state until charging is finished
+                        break;
+                    case "charged":
+                        //we are done the final cycle, move to the DONE state
+                        batteryInfo.state = batteryState.FINISH;
+                        anyStateChange = true;
+                        break;
+                    default:
+                        //unexpected case
+                        updateBatteryStatus(charger, i, status + " (UNEXPECTED)");
+                }
+                break;
+            case batteryState.FINISH:
+                //update the status to include "DONE"
+                updateBatteryStatus(charger, i, status + " (DONE)");
+                break;
+                 
         }
     });
     //now that all the state logic has been done for all the different states, do the final two steps

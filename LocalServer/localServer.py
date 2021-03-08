@@ -18,7 +18,7 @@ from socketserver import ThreadingMixIn
 DEFAULTS = {
         "ports" : "8080, 57923, 54782, 63342, 50124",
         "timeout" : "4",
-        "origins" : "null, lkamols@github.io/powercells"
+        "origins" : "null, https://lkamols.github.io, http://lkamols.github.com"
         }
 
 HOSTNAME = "localhost" #this is entirely designed to run on localhost so don't need to consider others
